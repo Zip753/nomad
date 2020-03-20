@@ -1,0 +1,99 @@
+---
+layout: docs
+page_title: expose Stanza - Job Specification
+sidebar_title: expose
+description: |-
+  The "expose" stanza allows specifying options for configuring Envoy expose
+  paths used in Consul Connect integration
+---
+
+# `expose` Stanza
+
+<Placement
+  groups={['job', 'group', 'service', 'connect', 'sidecar_service', 'proxy', 'expose']}
+/>
+
+The `expose` stanza allows configuring options for the default Envoy sidecar
+proxy managed by Nomad for [Consul Connect](/guides/integrations/consul-connect).
+It is valid only within the context of a `proxy` stanza. Detailed information about
+Expose Path configurations for Envoy can be found in Consul's
+[Expose Paths Configuration Reference](https://www.consul.io/docs/connect/registration/service-registration.html#expose-paths-configuration-reference)
+
+```hcl
+job "expose-example" {
+  datacenters = ["dc1"]
+  group "dashboard" {
+    network {
+      mode = "bridge"
+      port "expose" {
+        to = -1
+      }
+    }
+
+    service {
+      name = "count-dashboard"
+      port = "9001"
+
+      connect {
+        sidecar_service {
+          proxy {
+            expose {
+              checks = true
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+## `expose` Parameters
+
+- `checks` `(bool: false)` - Automatically generate expose path configuration for
+  HTTP and gRPC type checks defined for the service. Other types of checks are
+  not supported by the expose stanza.
+- `path` <code>([Path]: nil)</code> - A list of [Envoy Expose Path Configurations](/docs/job-specification/path)
+  to expose through Envoy.
+
+## `expose` Examples
+
+The following example is an expose configuration that is configured to automatically
+expose compatible service checks, as well as a custom path for a `/metrics` endpoint.
+
+```hcl
+service {
+  name = "count-dashboard"
+  port = "9001"
+
+  connect {
+    sidecar_service {
+      proxy {
+        expose {
+          checks = true
+          path {
+            path            = "/metrics"
+            protocol        = "http"
+            local_path_port = 9001
+            listener_port   = "expose"
+          }
+        }
+      }
+    }
+  }
+
+  check {
+    address_mode    = "driver"
+    name            = "api-expose-check"
+    tls_skip_verify = true
+    type            = "http"
+    port            = "expose"
+    interval        = "3s"
+    timeout         = "2s"
+    method          = "GET"
+    path            = "/health/api"
+  }
+}
+```
+
+[path]: /docs/job-specification/path 'Nomad expose path Specification'

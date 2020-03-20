@@ -1,0 +1,97 @@
+---
+layout: docs
+page_title: path Stanza - Job Specification
+sidebar_title: path
+description: |-
+  The "path" stanza allows specifying a custom Envoy expose path configuration
+  when using the default Envoy proxy in the Consul Connect integration
+---
+
+# `path` Stanza
+
+<Placement
+  groups={['job', 'group', 'service', 'connect', 'sidecar_service', 'proxy', 'expose', 'path']}
+/>
+
+The `path` stanza allows specifying a custom Envoy expose path configuration when
+using the default Envoy sidecar proxy managed by Nomad for [Consul Connect](/guides/integrations/consul-connect).
+It is valid only within the context of an `expose` stanza. Detailed information
+about Expose Path configurations for Envoy can be found in Consul's
+[Expose Paths Configuration Reference](https://www.consul.io/docs/connect/registration/service-registration.html#expose-paths-configuration-reference)
+
+```hcl
+job "expose-path-example" {
+  datacenters = ["dc1"]
+  group "dashboard" {
+    network {
+      mode = "bridge"
+      port "expose" {
+        to = -1
+      }
+    }
+
+    service {
+      name = "count-dashboard"
+      port = "9001"
+
+      connect {
+        sidecar_service {
+          proxy {
+            expose {
+              path {
+                path            = "/health/api"
+                protocol        = "http"
+                local_path_port = 9001
+                listener_port   = "expose"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+### `path` Parameters
+
+- `path` `(string: required)` - The HTTP path to expose. The path must be prefixed
+  with a slash (e.g. `/health`).
+- `protocol` `(string: required)` - Sets the protocol of the listener. Must be
+  `http` or `http2`. For gRPC use `http2`.
+- `local_path_port` `(int: required)` - The port the service is listening to for connections to
+   the configured `path`. Typically this will be the same as the `service.port` value.
+- `listener_port` <code>([Port]: required)</code> - The name of the port to use for the exposed listener. The
+   port should be configured to map inside the task's network namespace.
+
+## `path` Examples
+
+The following example is an expose configuration that manually exposes three
+endpoints of the Connect enabled service.
+
+```hcl
+proxy {
+  expose {
+    path {
+      path            = "/health/api"
+      protocol        = "http"
+      local_path_port = 9001
+      listener_port   = "expose"
+    }
+    path {
+      path            = "/metrics"
+      protocol        = "http"
+      local_path_port = 9001
+      listener_port   = "expose"
+    }
+    path {
+      path            = "/v2/health"
+      protocol        = "http2"
+      local_path_port = 9002
+      listener_port   = "expose"
+    }
+  }
+}
+```
+
+[port]: /docs/job-specification/network#port-parameters 'Nomad Port Parameters'
