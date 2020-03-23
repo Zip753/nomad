@@ -13,6 +13,13 @@ description: >-
 
 The `audit` stanza configures the Nomad agent to configure Audit logging behavior.
 
+When enabled, each HTTP request made to a nomad agent (client or server) will
+generate two audit log entries. These two entries correspond to a stage,
+OperationReceived and OperationComplete. Audit logging will generate a 
+OperationReceived event before the request is processed. An OperationComplete
+event will be sent after the request has been processed, but before the response
+body is returned to the end user.
+
 ```hcl
 audit {
   enabled = true
@@ -21,7 +28,7 @@ audit {
 
 ## `audit` Parameters
 
-- `enabled` `(bool: false)` = Specifies if audit logging should be enabled.
+- `enabled` `(bool: false)` - Specifies if audit logging should be enabled.
   When enabled, audit logging will occur for every request, unless it is
   filtered by a `filter`.
 
@@ -33,7 +40,7 @@ audit {
 
 ### `sink` Stanza
 
-The `sink` stanza is used to make make audit logging sinks for events to be 
+The `sink` stanza is used to make audit logging sinks for events to be 
 sent to. Currently only a single sink is supported.
 
 The key of the stanza corresponds to the name of the sink which is only used 
@@ -48,6 +55,17 @@ for logging purposes
     rotate_bytes       = 100
     rotate_duration    = "24h"
     rotate_max_files   = 10
+  }
+```
+
+By default, if no sink stanza is given the following default will be used.
+
+```hcl
+  sink "audit" {
+    type               = "file"
+    delivery_guarantee = "enforced"
+    format             = "json"
+    path               = "[data_dir]/audit/audit.log"
   }
 ```
 
@@ -66,7 +84,7 @@ for logging purposes
 - `format` `(string: "json", required)` - Specifies the output format to be 
   sent to a sink. Currently only `"json"` format is supported.
 
-- `path` `(string: "$DATA_DIR/audit/audit.log")` - Specifies the path and file
+- `path` `(string: "[data_dir]/audit/audit.log")` - Specifies the path and file
   name to use for the audit log. By default Nomad will use it's configured 
   [`data_dir`](/docs/configuration#data_dir) for a combined path of 
   `/data_dir/audit/audit.log`. If `rotate_bytes` or `rotate_duration` are set
@@ -85,3 +103,46 @@ for logging purposes
   file archives to keep. If 0 no files are ever deleted.
 
 ### `filter` Stanza
+
+The `filter` stanza is used to create filters to filter *out* matching events
+from being written to the audit log. By default, all events will be sent to an
+audit log for all stages (OperationReceived and OperationComplete). Filters
+are useful for operators who want to limit the performance impact of audit 
+logging as well as reducing the amount of events generated.
+
+`endpoints`, `stages`, and `operations` support [globbed pattern](https://github.com/ryanuber/go-glob/blob/master/README.md#example) matching.
+
+```hcl
+# Filter all requests and all stages for /ui/ and /v1/agent/health
+filter "default" {
+  type       = "HTTPEvent"
+  endpoints  = ["/ui/", "/v1/agent/health"]
+  stages     = ["*"]
+  operations = ["*"]
+}
+
+# Filter OperationReceived GET requests for all endpoints
+filter "OperationReceived GETs" {
+  type       = "HTTPEvent"
+  endpoints  = ["*"]
+  stages     = ["OperationReceived"]
+  operations = ["GET"]
+}
+```
+
+#### `filter` Parameters
+
+- `type` `(string: "HTTPEvent", required)` - Specifies the type of filter to 
+  create. Currently only HTTPEvent is supported.
+
+- `endpoints` `(array<string>: [])` - Specifies the list of endpoints to apply
+  the filter to.
+
+- `stages` `(array<string>: [])` - Specifies the list of stages 
+  (`"OperationReceived"`, `"OperationComplete"`, `"*"`) to apply the filter to
+  for a matching endpoint.
+
+- `operations` `(array<string>: [])` - Specifies the list of operations to
+  apply the filter to for a matching endpoint. For HTTPEvent types this 
+  corresponds to an HTTP verb (GET, PUT, POST, DELETE...).
+
